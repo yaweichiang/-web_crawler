@@ -7,7 +7,19 @@ from pprint import pprint
 import os
 import json
 from logging import getLogger, handlers
+from multiprocessing import Process
 
+logger_p = logging.getLogger('logger_p')
+logger_p.setLevel('DEBUG')
+formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s - %(message)s')
+file_handle = logging.FileHandler('log_p.log')
+file_handle.setLevel('DEBUG')
+file_handle.setFormatter(formatter)
+stream_handle = logging.StreamHandler()
+stream_handle.setLevel('ERROR')
+stream_handle.setFormatter(formatter)
+logger_p.addHandler(stream_handle)
+logger_p.addHandler(file_handle)
 
 def craw(date):
     url = 'https://www.taifex.com.tw/cht/3/futContractsDate'
@@ -22,8 +34,8 @@ def craw(date):
         try:
             trs = tables.find_all('tr', class_='12bk')
         except AttributeError:
-            logger.error(f'{date}沒有資料')
-            return {}
+            logger_p.error(f'{date}沒有資料')
+            return
         head = ['商品', '身份別', '交易多方口數', '交易多方金額', '交易空方口數', '交易空方金額', '交易多空淨口數', '交易多空淨額',
                 '未平倉多方口數', '未平倉多方金額', '未平倉空方口數', '未平倉空方金額', '未平倉淨口數', '未平倉多空淨額']
         data = {}
@@ -49,49 +61,31 @@ def craw(date):
             else:
                 data[product][who] = price
         # pprint(data)
-        return data
+        path = os.path.join('datas', f'{date.replace("/","_")}.json')
+        with open(path, 'w') as f:
+            json.dump(data, f)
+        logger_p.info(f'{date}有資料')
     else:
-        return{}
+        logger_p.warning(f'{date}沒資料')
 
 
 def main():
-
-    mydate = date.today()-timedelta(days=1)
+    processes = []
+    mydate = date.today()
     while mydate >= (date.today() - timedelta(days=730)):
-        path = os.path.join('datas', f'{mydate.strftime("%Y_%m_%d")}.json')
-        # if (os.path.isfile(path) and os.path.getsize(path) > 0) or (os.path.isfile(path.replace('.json','.txt')) and os.path.getsize(path.replace('.json','.txt')) > 0):
-        #     logger.info(f'{mydate}已有檔案')
-        #     mydate = mydate - timedelta(days=1)
-        #     continue
 
-        data = craw(mydate.strftime("%Y/%m/%d"))
-        if not data:
-            # with open(path.replace('.json', '.txt'), 'w', encoding='utf-8') as f:
-            #     f.write(mydate.strftime("%Y/%m/%d"))
-            sleep(0.5)
-            mydate = mydate - timedelta(days=1)
-            continue
-        else:
-            logger.info(f'{mydate}有資料')
-            with open(path, 'w') as f:
-                json.dump(data, f)
-            mydate = mydate - timedelta(days=1)
+        process = Process(target=craw, args=[mydate.strftime("%Y/%m/%d")])
+        process.start()
+        processes.append(process)
+        # craw(mydate.strftime("%Y/%m/%d"))
+        sleep(0.5)
+        mydate = mydate - timedelta(days=1)
+    for process in processes:
+        process.join()
 
 if __name__ == '__main__':
     start_time = time()
-    logger = logging.getLogger('logger')
-    logger.setLevel('DEBUG')
-    formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s - %(message)s')
-    file_handle = logging.FileHandler('log_o.log')
-    file_handle.setLevel('DEBUG')
-    file_handle.setFormatter(formatter)
-    stream_handle = logging.StreamHandler()
-    stream_handle.setLevel('ERROR')
-    stream_handle.setFormatter(formatter)
-    logger.addHandler(stream_handle)
-    logger.addHandler(file_handle)
     os.makedirs('datas', exist_ok=True)
     main()
     end_time = time()
-    logger.info(f'執行耗時 ：{end_time - start_time}')
-
+    logger_p.info(f'執行耗時：{end_time - start_time}')

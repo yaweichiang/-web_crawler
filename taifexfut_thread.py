@@ -7,6 +7,7 @@ from pprint import pprint
 import os
 import json
 from logging import getLogger, handlers
+from threading import Thread
 
 
 def craw(date):
@@ -49,40 +50,34 @@ def craw(date):
             else:
                 data[product][who] = price
         # pprint(data)
-        return data
+        path = os.path.join('datas', f'{date.replace("/","_")}.json')
+        with open(path, 'w') as f:
+            json.dump(data, f)
+        logger.info(f'{date}有資料')
     else:
-        return{}
+        logger.warning(f'{date}沒資料')
 
 
 def main():
-
-    mydate = date.today()-timedelta(days=1)
+    threads = []
+    mydate = date.today()
     while mydate >= (date.today() - timedelta(days=730)):
-        path = os.path.join('datas', f'{mydate.strftime("%Y_%m_%d")}.json')
-        # if (os.path.isfile(path) and os.path.getsize(path) > 0) or (os.path.isfile(path.replace('.json','.txt')) and os.path.getsize(path.replace('.json','.txt')) > 0):
-        #     logger.info(f'{mydate}已有檔案')
-        #     mydate = mydate - timedelta(days=1)
-        #     continue
 
-        data = craw(mydate.strftime("%Y/%m/%d"))
-        if not data:
-            # with open(path.replace('.json', '.txt'), 'w', encoding='utf-8') as f:
-            #     f.write(mydate.strftime("%Y/%m/%d"))
-            sleep(0.5)
-            mydate = mydate - timedelta(days=1)
-            continue
-        else:
-            logger.info(f'{mydate}有資料')
-            with open(path, 'w') as f:
-                json.dump(data, f)
-            mydate = mydate - timedelta(days=1)
+        thread = Thread(target=craw, args=[mydate.strftime("%Y/%m/%d")])
+        thread.start()
+        threads.append(thread)
+        # craw(mydate.strftime("%Y/%m/%d"))
+        sleep(0.5)
+        mydate = mydate - timedelta(days=1)
+    for thread in threads:
+        thread.join()
 
 if __name__ == '__main__':
     start_time = time()
     logger = logging.getLogger('logger')
     logger.setLevel('DEBUG')
     formatter = logging.Formatter('%(asctime)s - %(module)s - %(levelname)s - %(message)s')
-    file_handle = logging.FileHandler('log_o.log')
+    file_handle = logging.FileHandler('log_t.log')
     file_handle.setLevel('DEBUG')
     file_handle.setFormatter(formatter)
     stream_handle = logging.StreamHandler()
@@ -93,5 +88,4 @@ if __name__ == '__main__':
     os.makedirs('datas', exist_ok=True)
     main()
     end_time = time()
-    logger.info(f'執行耗時 ：{end_time - start_time}')
-
+    logger.info(f'執行耗時：{end_time - start_time}')
